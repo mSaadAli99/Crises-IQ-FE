@@ -50,6 +50,16 @@ export default function CrisisMap({ crises }: CrisisMapProps) {
     return "#3B8DD4";
   };
 
+  // A deterministic spread using the golden angle to offset markers sharing exact/close coordinates
+  const getJitteredPosition = (lat: number, lng: number, id: number): { latitude: number; longitude: number } => {
+    const angle = (id * 137.5) * (Math.PI / 180); // Golden angle
+    const radius = 0.0015 + (id % 3) * 0.0008; // Shift by ~150 to ~300 meters
+    return {
+      latitude: lat + Math.sin(angle) * radius,
+      longitude: lng + Math.cos(angle) * radius,
+    };
+  };
+
   return (
     <View style={styles.container}>
       <MapView
@@ -64,21 +74,21 @@ export default function CrisisMap({ crises }: CrisisMapProps) {
       >
         {crises
           .filter((c) => c.latitude && c.longitude)
-          .map((crisis) => (
-            <Marker
-              key={crisis.id}
-              coordinate={{
-                latitude: crisis.latitude!,
-                longitude: crisis.longitude!,
-              }}
-              title={crisis.crisis_type}
-              description={crisis.location}
-            >
-              <View style={[styles.markerContainer, { borderColor: getSeverityColor(crisis.severity) }]}>
-                <View style={[styles.markerDot, { backgroundColor: getSeverityColor(crisis.severity) }]} />
-              </View>
-            </Marker>
-          ))}
+          .map((crisis) => {
+            const coord = getJitteredPosition(crisis.latitude!, crisis.longitude!, crisis.id);
+            return (
+              <Marker
+                key={crisis.id}
+                coordinate={coord}
+                title={crisis.crisis_type}
+                description={crisis.location}
+              >
+                <View style={[styles.markerContainer, { borderColor: getSeverityColor(crisis.severity) }]}>
+                  <View style={[styles.markerDot, { backgroundColor: getSeverityColor(crisis.severity) }]} />
+                </View>
+              </Marker>
+            );
+          })}
       </MapView>
 
       {/* Overlays */}

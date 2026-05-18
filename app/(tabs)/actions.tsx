@@ -7,63 +7,102 @@ import {
   StyleSheet,
   Text,
   View,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useColors } from "@/hooks/useColors";
+import { useActions } from "@/hooks/useCrises";
+import { API_ENDPOINTS } from "@/constants/API";
 
 const FILTERS = ["All", "Routing", "Dispatch", "Alerts"];
-
-const ACTION_CARDS = [
-  {
-    id: "1",
-    type: "ROUTING INTERVENTION",
-    time: "14:22:05",
-    title: "Reroute Karsaz Traffic",
-    status: "EXECUTED",
-    description: "Diversion active via Shahrah-e-Faisal to bypass localized flooding point at Karsaz Flyover.",
-    confidence: 0.85,
-    impactScore: "+12.4 OPS",
-    color: "#3B8DD4",
-    icon: "swap-horizontal",
-  },
-  {
-    id: "2",
-    type: "DISPATCH LOGIC",
-    time: "14:18:32",
-    title: "Ambulance Tier 2 Pre-positioning",
-    status: "SIMULATED",
-    description: "Projecting 4x units to move to Saddar sector to preempt rising casualty reports from high-density zone.",
-    hasAction: true,
-    actionLabel: "Execute Now",
-    color: "#F0883E",
-    icon: "ambulance",
-  },
-  {
-    id: "3",
-    type: "PUBLIC ALERT",
-    time: "14:15:01",
-    title: "Geo-Fence SMS Push",
-    status: "EXECUTED",
-    description: "Broadcast alert sent to 45,000 devices in Radius Zone 4 (Gulshan) regarding power...",
-    color: "#F85149",
-    icon: "bell-outline",
-  },
-];
 
 export default function ActionsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+  
   const [activeFilter, setActiveFilter] = useState("All");
-  const [viewMode, setViewMode] = useState<"LIVE" | "BASELINE">("LIVE");
+  const [executingIds, setExecutingIds] = useState<Record<number, boolean>>({});
+
+  const { data: actions = [], isLoading } = useActions();
 
   const topPad = Platform.OS === "web" ? 20 : insets.top;
+
+  const filteredActions = React.useMemo(() => {
+    return actions.filter((act) => {
+      const type = (act.action_type || "").toLowerCase();
+      
+      // Exclude tickets
+      if (type === "ticket") return false;
+
+      if (activeFilter === "All") return true;
+      if (activeFilter === "Routing") return type.includes("reroute") || type.includes("routing");
+      if (activeFilter === "Dispatch") return type.includes("dispatch");
+      if (activeFilter === "Alerts") return type.includes("alert");
+      return true;
+    });
+  }, [actions, activeFilter]);
+
+  const handleExecuteAction = async (actionId: number) => {
+    setExecutingIds((prev) => ({ ...prev, [actionId]: true }));
+    try {
+      const res = await fetch(`${API_ENDPOINTS.ACTIONS}/${actionId}/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("Failed to execute action");
+      
+      // Invalidate queries so that action page, detail page, and stats page refresh
+      queryClient.invalidateQueries({ queryKey: ["actions"] });
+      queryClient.invalidateQueries({ queryKey: ["crises"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
+    } catch (err) {
+      console.error("Execution error:", err);
+    } finally {
+      setExecutingIds((prev) => ({ ...prev, [actionId]: false }));
+    }
+  };
+
+  const getActionIcon = (type: string) => {
+    const t = (type || "").toLowerCase();
+    if (t.includes("reroute") || t.includes("routing")) return "swap-horizontal";
+    if (t.includes("dispatch")) return "ambulance";
+    if (t.includes("alert")) return "bell-outline";
+    return "play-circle-outline";
+  };
+
+  const getActionColor = (type: string) => {
+    const t = (type || "").toLowerCase();
+    if (t.includes("dispatch")) return colors.critical;
+    if (t.includes("alert")) return colors.warning;
+    return colors.tint;
+  };
+
+  const getActionTypeLabel = (type: string) => {
+    const t = (type || "").toLowerCase();
+    if (t.includes("reroute") || t.includes("routing")) return "ROUTING INTERVENTION";
+    if (t.includes("dispatch")) return "DISPATCH LOGIC";
+    if (t.includes("alert")) return "PUBLIC ALERT";
+    return "OPERATIONAL TASK";
+  };
+
+  const formatTime = (isoString: string) => {
+    if (!isoString) return "";
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    } catch {
+      return "";
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: "#0A0C10" }]}>
       <FlatList
-        data={ACTION_CARDS}
-        keyExtractor={(item) => item.id}
+        data={filteredActions}
+        keyExtractor={(item) => item.id.toString()}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingTop: topPad,
@@ -110,90 +149,93 @@ export default function ActionsScreen() {
               ))}
             </View>
 
-            {/* Performance Card */}
-            <View style={styles.perfCard}>
-              <View style={styles.perfHeader}>
-                <Text style={styles.perfTitle}>Aggregate Impact Performance</Text>
-                <View style={styles.toggleRow}>
-                  <Pressable 
-                    onPress={() => setViewMode("LIVE")}
-                    style={[styles.toggleBtn, viewMode === "LIVE" && { backgroundColor: colors.tint }]}
-                  >
-                    <Text style={[styles.toggleText, viewMode === "LIVE" && { color: "#fff" }]}>LIVE</Text>
-                  </Pressable>
-                  <Pressable 
-                    onPress={() => setViewMode("BASELINE")}
-                    style={[styles.toggleBtn, viewMode === "BASELINE" && { backgroundColor: "#30363D" }]}
-                  >
-                    <Text style={[styles.toggleText, viewMode === "BASELINE" && { color: "#8B949E" }]}>BASELINE</Text>
-                  </Pressable>
-                </View>
-              </View>
 
-              <View style={styles.perfGrid}>
-                <View style={styles.perfItem}>
-                  <Text style={styles.perfKey}>CONGESTION DELTA</Text>
-                  <Text style={[styles.perfVal, { color: colors.tint }]}>-22% <Text style={styles.perfSub}>vs Baseline</Text></Text>
-                  <View style={[styles.perfBar, { backgroundColor: colors.tint + '20' }]}>
-                    <View style={[styles.perfBarFill, { width: '78%', backgroundColor: colors.tint }]} />
-                  </View>
-                </View>
-                <View style={styles.perfItem}>
-                  <Text style={styles.perfKey}>AVG. RESPONSE TIME</Text>
-                  <Text style={[styles.perfVal, { color: colors.warning }]}>-4.2m <Text style={styles.perfSub}>System Optimization</Text></Text>
-                  <View style={[styles.perfBar, { backgroundColor: colors.warning + '20' }]}>
-                    <View style={[styles.perfBarFill, { width: '65%', backgroundColor: colors.warning }]} />
-                  </View>
-                </View>
+
+            {isLoading && (
+              <ActivityIndicator color={colors.tint} style={{ marginVertical: 20 }} />
+            )}
+
+            {!isLoading && filteredActions.length === 0 && (
+              <View style={{ padding: 40, alignItems: "center" }}>
+                <MaterialCommunityIcons name="clipboard-check-outline" size={48} color="#30363D" />
+                <Text style={{ color: "#8B949E", marginTop: 12, fontFamily: "Inter_600SemiBold", textAlign: "center" }}>
+                  No operational actions registered. Ingest a signal to trigger the AI agents planner.
+                </Text>
               </View>
-            </View>
+            )}
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={[styles.card, { borderColor: item.color + '40' }]}>
-            <View style={[styles.cardHeader, { borderBottomColor: '#1C2128' }]}>
-              <View style={styles.cardHeaderLeft}>
-                <MaterialCommunityIcons name={item.icon as any} size={16} color={item.color} />
-                <Text style={[styles.cardTypeText, { color: item.color }]}>{item.type}</Text>
-              </View>
-              <Text style={styles.cardTime}>{item.time}</Text>
-            </View>
-            
-            <View style={styles.cardBody}>
-              <View style={styles.cardTitleRow}>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <View style={styles.statusTag}>
-                  <View style={[styles.statusDot, { backgroundColor: item.color }]} />
-                  <Text style={styles.statusTagText}>{item.status}</Text>
+        renderItem={({ item }) => {
+          const actColor = getActionColor(item.action_type);
+          const actIcon = getActionIcon(item.action_type);
+          const isSimulated = (item.status || "").toLowerCase() === "simulated";
+          const isExecuting = !!executingIds[item.id];
+
+          return (
+            <View style={[styles.card, { borderColor: actColor + '30' }]}>
+              <View style={[styles.cardHeader, { borderBottomColor: '#1C2128' }]}>
+                <View style={styles.cardHeaderLeft}>
+                  <MaterialCommunityIcons name={actIcon as any} size={16} color={actColor} />
+                  <Text style={[styles.cardTypeText, { color: actColor }]}>
+                    {getActionTypeLabel(item.action_type)}
+                  </Text>
                 </View>
+                <Text style={styles.cardTime}>{formatTime(item.created_at)}</Text>
               </View>
               
-              <Text style={styles.cardDesc}>{item.description}</Text>
-
-              {item.confidence && (
-                <View style={styles.cardMetaRow}>
-                  <View style={styles.metaItem}>
-                    <Text style={styles.metaKey}>SIMULATION CONFIDENCE</Text>
-                    <View style={styles.confidenceBar}>
-                      <View style={[styles.confidenceFill, { width: '85%', backgroundColor: item.color }]} />
-                    </View>
-                  </View>
-                  <View style={styles.metaItemRight}>
-                    <Text style={styles.metaKey}>IMPACT SCORE</Text>
-                    <Text style={[styles.metaVal, { color: colors.tint }]}>{item.impactScore}</Text>
+              <View style={styles.cardBody}>
+                <View style={styles.cardTitleRow}>
+                  <Text style={styles.cardTitle}>{item.description.split(" in ")[0].split(" to ")[0]}</Text>
+                  <View style={[styles.statusTag, { 
+                    backgroundColor: isSimulated ? "rgba(240,136,62,0.08)" : "rgba(63,185,80,0.08)",
+                    borderColor: isSimulated ? "rgba(240,136,62,0.2)" : "rgba(63,185,80,0.2)",
+                    borderWidth: 1
+                  }]}>
+                    <View style={[styles.statusDot, { backgroundColor: isSimulated ? colors.warning : "#3FB950" }]} />
+                    <Text style={[styles.statusTagText, { color: isSimulated ? colors.warning : "#3FB950" }]}>
+                      {item.status.toUpperCase()}
+                    </Text>
                   </View>
                 </View>
-              )}
+                
+                <Text style={styles.cardDesc}>{item.description}</Text>
 
-              {item.hasAction && (
-                <Pressable style={[styles.actionBtn, { backgroundColor: item.color }]}>
-                  <MaterialCommunityIcons name="lightning-bolt" size={16} color="#E6EDF3" />
-                  <Text style={styles.actionBtnText}>{item.actionLabel}</Text>
-                </Pressable>
-              )}
+                {item.simulation_result?.message && (
+                  <View style={{ 
+                    borderLeftWidth: 2, 
+                    borderLeftColor: colors.tint, 
+                    paddingLeft: 8,
+                    backgroundColor: 'rgba(13,17,23,0.4)',
+                    paddingVertical: 8,
+                    borderRadius: 4,
+                    marginBottom: 16
+                  }}>
+                    <Text style={{ fontSize: 12, fontStyle: 'italic', color: '#8B949E', fontFamily: 'Inter_400Regular' }}>
+                      "Simulation: {item.simulation_result.message}"
+                    </Text>
+                  </View>
+                )}
+
+                {isSimulated && (
+                  <Pressable 
+                    onPress={() => handleExecuteAction(item.id)}
+                    disabled={isExecuting}
+                    style={[styles.actionBtn, { backgroundColor: actColor }]}
+                  >
+                    {isExecuting ? (
+                      <ActivityIndicator size="small" color="#E6EDF3" />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="lightning-bolt" size={16} color="#E6EDF3" />
+                        <Text style={styles.actionBtnText}>Execute Action</Text>
+                      </>
+                    )}
+                  </Pressable>
+                )}
+              </View>
             </View>
-          </View>
-        )}
+          );
+        }}
       />
     </View>
   );
@@ -241,9 +283,9 @@ const styles = StyleSheet.create({
   cardBody: { padding: 12 },
   cardTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
   cardTitle: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#E6EDF3", flex: 1 },
-  statusTag: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.05)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+  statusTag: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
   statusDot: { width: 4, height: 4, borderRadius: 2 },
-  statusTagText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#8B949E" },
+  statusTagText: { fontSize: 10, fontFamily: "Inter_700Bold" },
   cardDesc: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#8B949E", lineHeight: 18, marginBottom: 16 },
   cardMetaRow: { flexDirection: "row", gap: 20 },
   metaItem: { flex: 1, gap: 8 },

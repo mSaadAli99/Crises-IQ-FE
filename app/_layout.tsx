@@ -34,7 +34,6 @@ function RootLayoutNav() {
           headerShadowVisible: false,
         }}
       />
-      <Stack.Screen name="simulation" options={{ presentation: 'modal', headerShown: false }} />
     </Stack>
   );
 }

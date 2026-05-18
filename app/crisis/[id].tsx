@@ -11,81 +11,24 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Circle, Defs, RadialGradient, Stop, Rect } from "react-native-svg";
-
+import CrisisMap from "@/components/CrisisMap";
 import { useColors } from "@/hooks/useColors";
 import { useCrisis } from "@/hooks/useCrises";
 
 function ConfidenceCircle({ value }: { value: number }) {
-  const size = 60;
-  const strokeWidth = 4;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (value * circumference);
-
   return (
-    <View style={styles.confidenceContainer}>
-      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="#1C2128"
-          strokeWidth={strokeWidth}
-          fill="none"
-        />
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="#3B8DD4"
-          strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          fill="none"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </Svg>
-      <View style={StyleSheet.absoluteFill}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={styles.confidenceText}>{Math.round(value * 100)}%</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function CrisisMap({ zoneId }: { zoneId: string }) {
-  const colors = useColors();
-  return (
-    <View style={styles.mapContainer}>
-      <LinearGradient colors={["#0D1117", "#161B22"]} style={StyleSheet.absoluteFill} />
-      <Svg width="100%" height="240">
-        <Defs>
-          <RadialGradient id="grad" cx="50%" cy="50%" rx="40%" ry="40%" fx="50%" fy="50%">
-            <Stop offset="0%" stopColor={colors.critical} stopOpacity="0.5" />
-            <Stop offset="100%" stopColor={colors.critical} stopOpacity="0" />
-          </RadialGradient>
-        </Defs>
-        <Rect width="100%" height="100%" fill="url(#grad)" />
-        {[1, 2, 3, 4, 5].map(i => (
-          <React.Fragment key={i}>
-            <Rect x={i * 80} y="0" width="1" height="100%" fill="#1C2128" />
-            <Rect x="0" y={i * 50} width="100%" height="1" fill="#1C2128" />
-          </React.Fragment>
-        ))}
-      </Svg>
-
-      <View style={styles.mapOverlays}>
-        <View style={[styles.alertBadge, { backgroundColor: colors.critical }]}>
-          <MaterialCommunityIcons name="alert" size={14} color="#fff" />
-          <Text style={styles.alertBadgeText}>CRITICAL ALERT</Text>
-        </View>
-        <View style={styles.zoneBadge}>
-          <Text style={styles.zoneBadgeText}>ZONE: {zoneId}</Text>
-        </View>
-      </View>
+    <View style={{
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      borderWidth: 3,
+      borderColor: "#3B8DD4",
+      alignItems: "center",
+      justifyContent: "center",
+    }}>
+      <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#E6EDF3' }}>
+        {Math.round(value * 100)}%
+      </Text>
     </View>
   );
 }
@@ -97,6 +40,38 @@ export default function CrisisDetailScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const { data: crisis, isLoading, isError } = useCrisis(id);
+
+  const signals = React.useMemo(() => {
+    if (!crisis?.agent_logs) return [];
+    
+    // Extract unique signals processed by Ingestion (Agent 1) or Detection (Agent 2)
+    const uniqueSignalsMap = new Map();
+    
+    crisis.agent_logs.forEach((log: any) => {
+      if (log.agent_number === 2 && log.input_data?.signals) {
+        log.input_data.signals.forEach((sig: any) => {
+          const key = sig.normalized_text || sig.text;
+          if (key) uniqueSignalsMap.set(key, sig);
+        });
+      }
+      if (log.agent_number === 1 && log.output_data) {
+        const sig = {
+          normalized_text: log.output_data.normalized_text,
+          source_type: log.output_data.source_type || "form",
+          location: log.output_data.location || crisis.location,
+        };
+        const key = sig.normalized_text;
+        if (key) uniqueSignalsMap.set(key, sig);
+      }
+    });
+    
+    return Array.from(uniqueSignalsMap.values());
+  }, [crisis]);
+
+  const filteredActions = React.useMemo(() => {
+    if (!crisis?.actions) return [];
+    return crisis.actions.filter((act: any) => (act.action_type || "").toLowerCase() !== "ticket");
+  }, [crisis]);
 
   if (isLoading) {
     return (
@@ -121,7 +96,17 @@ export default function CrisisDetailScreen() {
     <View style={[styles.container, { backgroundColor: "#0A0C10" }]}>
       {/* Header Bar */}
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/");
+            }
+          }} 
+          style={styles.backBtn}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+        >
           <Ionicons name="chevron-back" size={24} color="#E6EDF3" />
         </Pressable>
         <View style={styles.logoRow}>
@@ -129,7 +114,7 @@ export default function CrisisDetailScreen() {
           <Text style={styles.headerTitle}>CrisisIQ</Text>
         </View>
         <View style={styles.headerRight}>
-          <Text style={styles.headerLoc}>Karachi, PK</Text>
+          <Text style={styles.headerLoc}>{crisis.location.split(',')[0]}</Text>
           <Ionicons name="location-outline" size={14} color="#8B949E" />
         </View>
       </View>
@@ -138,16 +123,18 @@ export default function CrisisDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: bottomPad + 40 }}
       >
-        <CrisisMap zoneId="LYARI_EX_04" />
+        <View style={styles.mapContainer}>
+          <CrisisMap crises={[crisis]} />
+        </View>
 
         <View style={styles.content}>
           {/* Main Detection Card */}
           <View style={[styles.mainCard, { backgroundColor: "#161B22", borderColor: "#30363D" }]}>
             <View style={styles.mainCardRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.mainCardTitle}>{crisis.crisis_type} Detection</Text>
+                <Text style={styles.mainCardTitle}>{(crisis.crisis_type || "").toUpperCase()} Detection</Text>
                 <Text style={styles.mainCardSubtitle}>
-                  <Text style={{ color: colors.warning }}>{crisis.status || 'Active'}</Text>
+                  <Text style={{ color: crisis.status === 'resolved' ? '#3FB950' : colors.warning }}>{(crisis.status || 'Active').toUpperCase()}</Text>
                 </Text>
               </View>
               <ConfidenceCircle value={crisis.confidence_score || 0} />
@@ -159,15 +146,15 @@ export default function CrisisDetailScreen() {
           <View style={[styles.analysisCard, { backgroundColor: "#161B22", borderColor: "#30363D" }]}>
             <View style={styles.analysisHeader}>
               <Text style={styles.analysisTitle}>SITUATION ANALYSIS</Text>
-              <View style={styles.severityTag}>
-                <Text style={styles.severityTagText}>{(crisis.severity || 'Unknown').toUpperCase()}</Text>
+              <View style={[styles.severityTag, { backgroundColor: crisis.severity === 'critical' ? colors.critical + '20' : colors.warning + '20' }]}>
+                <Text style={[styles.severityTagText, { color: crisis.severity === 'critical' ? colors.critical : colors.warning }]}>{(crisis.severity || 'Unknown').toUpperCase()}</Text>
               </View>
             </View>
 
             <View style={styles.analysisGrid}>
               <View style={styles.analysisItem}>
                 <Text style={styles.analysisKey}>SEVERITY</Text>
-                <Text style={styles.analysisVal}>{crisis.severity || '--'}</Text>
+                <Text style={styles.analysisVal}>{(crisis.severity || '--').toUpperCase()}</Text>
               </View>
               <View style={styles.analysisItem}>
                 <Text style={styles.analysisKey}>LOCATION</Text>
@@ -175,66 +162,146 @@ export default function CrisisDetailScreen() {
               </View>
             </View>
 
-            <Text style={styles.analysisText}>Crisis reported at {crisis.location}. Status: {crisis.status || 'Active'}.</Text>
+            <Text style={styles.analysisText}>
+              {crisis.situation_report?.reasoning || `Crisis reported at ${crisis.location}. Status: ${crisis.status || 'Active'}.`}
+            </Text>
+            {crisis.situation_report?.impact_estimate && (
+              <View style={{ marginTop: 12 }}>
+                <Text style={[styles.analysisKey, { marginBottom: 4 }]}>IMPACT ESTIMATE</Text>
+                <Text style={styles.analysisText}>{crisis.situation_report.impact_estimate}</Text>
+              </View>
+            )}
           </View>
 
           {/* Input Signals */}
-          <Text style={styles.sectionTitle}>INPUT SIGNALS</Text>
-          <View style={styles.signalsGrid}>
-            <View style={styles.signalMiniCard}>
-              <View style={styles.signalHeader}>
-                <Ionicons name="cloud-outline" size={16} color={colors.tint} />
-                <Text style={styles.signalLabel}>Weather Sensor</Text>
-              </View>
-              <Text style={styles.signalVal}>88mm/h Precip</Text>
-            </View>
-            <View style={styles.signalMiniCard}>
-              <View style={styles.signalHeader}>
-                <Ionicons name="car-outline" size={16} color={colors.warning} />
-                <Text style={styles.signalLabel}>Traffic API</Text>
-              </View>
-              <Text style={styles.signalVal}>+140% Spike</Text>
-            </View>
-          </View>
+          <Text style={styles.sectionTitle}>INPUT SIGNALS ({signals.length})</Text>
+          {signals.length > 0 ? (
+            <View style={{ gap: 12, marginBottom: 24 }}>
+              {signals.map((sig: any, index: number) => {
+                const getSourceIcon = (source: string) => {
+                  const s = (source || "").toLowerCase();
+                  if (s.includes("weather")) return "cloud-outline";
+                  if (s.includes("traffic")) return "car-outline";
+                  if (s.includes("social")) return "chatbubble-outline";
+                  return "document-text-outline";
+                };
 
-          <View style={styles.socialCard}>
-            <View style={styles.signalHeader}>
-              <Ionicons name="chatbubble-outline" size={16} color={colors.tint} />
-              <Text style={styles.signalLabel}>Social Intelligence</Text>
+                const getSourceColor = (source: string) => {
+                  const s = (source || "").toLowerCase();
+                  if (s.includes("weather")) return colors.tint;
+                  if (s.includes("traffic")) return colors.warning;
+                  if (s.includes("social")) return "#1DA1F2";
+                  return colors.text;
+                };
+
+                return (
+                  <View key={index} style={[styles.socialCard, { marginBottom: 0 }]}>
+                    <View style={styles.signalHeader}>
+                      <Ionicons name={getSourceIcon(sig.source_type) as any} size={16} color={getSourceColor(sig.source_type)} />
+                      <Text style={styles.signalLabel}>{(sig.source_type || "intelligence").toUpperCase()} FEED ({sig.location || crisis.location})</Text>
+                    </View>
+                    <Text style={styles.socialText}>
+                      "{sig.normalized_text || sig.text || "No signal details available."}"
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
-            <Text style={styles.socialText}>
-              "Water crossing the barrier at Lyari ramp. Stuck for 20 mins." - <Text style={{ color: colors.tint }}>@pk_traffic_bot</Text>
-            </Text>
-          </View>
+          ) : (
+            <View style={[styles.socialCard, { padding: 16, alignItems: 'center', marginBottom: 24 }]}>
+              <Ionicons name="information-circle-outline" size={24} color={colors.mutedForeground} style={{ marginBottom: 4 }} />
+              <Text style={[styles.socialText, { color: colors.mutedForeground, textAlign: 'center' }]}>
+                No direct sensor/ingestion signals logged for this crisis.
+              </Text>
+            </View>
+          )}
 
           {/* Recommended Actions */}
-          <Text style={styles.sectionTitle}>RECOMMENDED ACTIONS</Text>
+          <Text style={styles.sectionTitle}>RECOMMENDED ACTIONS ({filteredActions.length})</Text>
           <View style={styles.actionsList}>
-            <Pressable style={[styles.actionBtn, { backgroundColor: colors.tint }]}>
-              <MaterialCommunityIcons name="robot-outline" size={20} color="#E6EDF3" />
-              <Text style={styles.actionBtnText}>Deploy Rerouting Agent</Text>
-              <Ionicons name="chevron-forward" size={16} color="#E6EDF3" />
-            </Pressable>
-            <Pressable style={styles.actionBtnSecondary}>
-              <Ionicons name="shield-outline" size={20} color="#E6EDF3" />
-              <Text style={styles.actionBtnText}>Alert Traffic Police</Text>
-              <Ionicons name="chevron-forward" size={16} color="#E6EDF3" />
-            </Pressable>
-            <Pressable style={styles.actionBtnSecondary}>
-              <Ionicons name="chatbubble-ellipses-outline" size={20} color="#E6EDF3" />
-              <Text style={styles.actionBtnText}>Issue SMS Warnings</Text>
-              <Ionicons name="chevron-forward" size={16} color="#E6EDF3" />
-            </Pressable>
-          </View>
+            {filteredActions.length > 0 ? (
+              filteredActions.map((act: any) => {
+                const getActionIcon = (type: string) => {
+                  const t = (type || "").toLowerCase();
+                  if (t.includes("reroute")) return "routes";
+                  if (t.includes("dispatch")) return "ambulance";
+                  if (t.includes("alert")) return "bell-outline";
+                  return "play-circle-outline";
+                };
 
-          {/* Bottom Action */}
-          <Pressable 
-            onPress={() => router.push("/simulation")}
-            style={styles.simulationBtn}
-          >
-            <Ionicons name="videocam-outline" size={20} color="#0A0C10" />
-            <Text style={styles.simulationBtnText}>View Simulation</Text>
-          </Pressable>
+                const getActionColor = (type: string) => {
+                  const t = (type || "").toLowerCase();
+                  if (t.includes("dispatch")) return colors.critical;
+                  if (t.includes("alert")) return colors.warning;
+                  return colors.tint;
+                };
+
+                return (
+                  <View 
+                    key={act.id} 
+                    style={[
+                      styles.actionBtnSecondary, 
+                      { 
+                        flexDirection: 'column', 
+                        alignItems: 'stretch',
+                        backgroundColor: "#161B22",
+                        borderColor: "#30363D",
+                        padding: 16,
+                        gap: 8
+                      }
+                    ]}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <MaterialCommunityIcons name={getActionIcon(act.action_type) as any} size={20} color={getActionColor(act.action_type)} />
+                      <Text style={[styles.actionBtnText, { color: getActionColor(act.action_type) }]}>
+                        {(act.action_type || "action").toUpperCase()}
+                      </Text>
+                      <View style={{ 
+                        backgroundColor: act.status === 'simulated' ? 'rgba(59,141,212,0.15)' : 'rgba(63,185,80,0.15)',
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: 4
+                      }}>
+                        <Text style={{ 
+                          fontSize: 10, 
+                          fontFamily: 'Inter_700Bold', 
+                          color: act.status === 'simulated' ? colors.tint : '#3FB950' 
+                        }}>
+                          {(act.status || "pending").toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <Text style={{ fontSize: 13, color: '#E6EDF3', lineHeight: 18, fontFamily: 'Inter_400Regular' }}>
+                      {act.description}
+                    </Text>
+
+                    {act.simulation_result?.message && (
+                      <View style={{ 
+                        marginTop: 4, 
+                        borderLeftWidth: 2, 
+                        borderLeftColor: colors.tint, 
+                        paddingLeft: 8,
+                        backgroundColor: 'rgba(13,17,23,0.4)',
+                        paddingVertical: 6,
+                        borderRadius: 4
+                      }}>
+                        <Text style={{ fontSize: 11, fontStyle: 'italic', color: '#8B949E' }}>
+                          "Simulation: {act.simulation_result.message}"
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            ) : (
+              <View style={[styles.actionBtnSecondary, { justifyContent: 'center', padding: 16 }]}>
+                <Text style={[styles.actionBtnText, { textAlign: 'center', color: colors.mutedForeground }]}>
+                  No recommended actions have been generated yet.
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       </ScrollView>
     </View>

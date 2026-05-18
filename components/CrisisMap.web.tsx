@@ -72,6 +72,13 @@ export default function CrisisMap({ crises }: CrisisMapProps) {
       iconAnchor: [9, 9],
     });
 
+  // A deterministic spread using the golden angle to offset markers sharing exact/close coordinates
+  const getJitteredPosition = (lat: number, lng: number, id: number): [number, number] => {
+    const angle = (id * 137.5) * (Math.PI / 180); // Golden angle
+    const radius = 0.0015 + (id % 3) * 0.0008; // Shift by ~150 to ~300 meters
+    return [lat + Math.sin(angle) * radius, lng + Math.cos(angle) * radius];
+  };
+
   return (
     <View style={styles.container}>
       <div style={{ height: "100%", width: "100%" }}>
@@ -91,21 +98,24 @@ export default function CrisisMap({ crises }: CrisisMapProps) {
 
           {crises
             .filter((c) => c.latitude && c.longitude)
-            .map((crisis) => (
-              <Marker
-                key={crisis.id}
-                position={[crisis.latitude!, crisis.longitude!]}
-                icon={createCustomIcon(crisis.severity)}
-              >
-                <Popup>
-                  <div style={{ color: "#0d1117", fontWeight: "bold" }}>
-                    {crisis.crisis_type}
-                    <br />
-                    <span style={{ fontWeight: "normal" }}>{crisis.location}</span>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+            .map((crisis) => {
+              const [jLat, jLng] = getJitteredPosition(crisis.latitude!, crisis.longitude!, crisis.id);
+              return (
+                <Marker
+                  key={crisis.id}
+                  position={[jLat, jLng]}
+                  icon={createCustomIcon(crisis.severity)}
+                >
+                  <Popup>
+                    <div style={{ color: "#0d1117", fontWeight: "bold" }}>
+                      {crisis.crisis_type}
+                      <br />
+                      <span style={{ fontWeight: "normal" }}>{crisis.location}</span>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
         </MapContainer>
       </div>
 

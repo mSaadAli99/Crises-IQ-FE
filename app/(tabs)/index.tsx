@@ -13,7 +13,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CrisisMap from "@/components/CrisisMap";
 import { useColors } from "@/hooks/useColors";
-import { useCrises, Crisis as BackendCrisis } from "@/hooks/useCrises";
+import { useQueryClient } from "@tanstack/react-query";
+import { API_ENDPOINTS } from "@/constants/API";
+import { useCrises, useStats, Crisis as BackendCrisis } from "@/hooks/useCrises";
 
 
 interface StatCardProps {
@@ -121,7 +123,35 @@ function CrisisCard({ crisis }: CrisisCardProps) {
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { data: backendCrises, isLoading, isError, refetch } = useCrises();
+  const queryClient = useQueryClient();
+  const { data: backendCrises, isLoading, isError, refetch } = useCrises(5);
+  const { data: stats, isLoading: statsLoading } = useStats();
+
+  React.useEffect(() => {
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(API_ENDPOINTS.WS_CRISES);
+      
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.event === "new_crisis") {
+            // Invalidate queries to fetch fresh data when a new crisis is detected
+            queryClient.invalidateQueries({ queryKey: ['crises'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
+          }
+        } catch (e) {
+          console.error("Error parsing WS message", e);
+        }
+      };
+    } catch (e) {
+      console.error("WebSocket connection error:", e);
+    }
+
+    return () => {
+      if (ws) ws.close();
+    };
+  }, [queryClient]);
 
   // Only use backend data
   const displayCrises = backendCrises || [];
@@ -168,20 +198,20 @@ export default function DashboardScreen() {
             <View style={styles.statsRow}>
               <StatCard
                 label="ACTIVE CRISES"
-                value={displayCrises.length}
+                value={stats ? stats.active_crises : (statsLoading ? "..." : displayCrises.length)}
                 icon="triangle-outline"
                 color={colors.critical}
               />
               <StatCard
                 label="AGENTS RUNNING"
-                value="--"
+                value={stats ? stats.agents_running : "--"}
                 icon="shield-outline"
                 color={colors.tint}
                 iconType="MaterialCommunityIcons"
               />
               <StatCard
                 label="SYSTEM STATUS"
-                value={isError ? "OFFLINE" : "STABLE"}
+                value={isError ? "OFFLINE" : (stats ? stats.system_status.toUpperCase() : "STABLE")}
                 icon={isError ? "alert-circle-outline" : "checkmark-circle-outline"}
                 color={isError ? colors.critical : colors.tint}
               />
@@ -194,7 +224,10 @@ export default function DashboardScreen() {
               {isError && (
                 <Text style={{ color: colors.critical, fontSize: 10 }}>Backend Unreachable</Text>
               )}
-              <Pressable>
+              <Pressable onPress={() => {
+                // Navigate to a dedicated crises list page if it exists
+                // router.push("/(tabs)/crises_list" as any) 
+              }}>
                 <Text style={styles.viewAllText}>VIEW ALL</Text>
               </Pressable>
             </View>
