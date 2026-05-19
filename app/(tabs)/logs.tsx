@@ -13,13 +13,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import { useAgentLogs } from "@/hooks/useCrises";
+import { screenPadding, tabBarClearance, textShrink } from "@/constants/layout";
 
 const FILTERS = [
-  "All Agents", 
-  "Agent 1 (Ingestion)", 
-  "Agent 2 (Detection)", 
-  "Agent 3 (Analysis)", 
-  "Agent 4 (Planner)"
+  "All Agents",
+  "Agent 1 (Ingestion)",
+  "Agent 2 (Detection)",
+  "Agent 3 (Analysis)",
+  "Agent 4 (Planner)",
+  "Agent 5 (Forensics)",
 ];
 
 export default function LogsScreen() {
@@ -39,16 +41,18 @@ export default function LogsScreen() {
       if (activeFilter === "Agent 2 (Detection)") return log.agent_number === 2;
       if (activeFilter === "Agent 3 (Analysis)") return log.agent_number === 3;
       if (activeFilter === "Agent 4 (Planner)") return log.agent_number === 4;
+      if (activeFilter === "Agent 5 (Forensics)") return log.agent_number === 5;
       return true;
     });
   }, [logs, activeFilter]);
 
   const getAgentColor = (num: number) => {
     switch (num) {
-      case 1: return colors.tint;       // Ingestion -> Blue
-      case 2: return "#8250DF";         // Detection -> Purple
-      case 3: return "#F0883E";         // Analysis -> Orange
-      default: return "#3FB950";        // Planner -> Green
+      case 1: return colors.tint;
+      case 2: return "#8250DF";
+      case 3: return "#F0883E";
+      case 5: return "#FF6B6B";
+      default: return "#3FB950";
     }
   };
 
@@ -75,7 +79,7 @@ export default function LogsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingTop: topPad,
-          paddingBottom: 100,
+          paddingBottom: tabBarClearance,
         }}
         ListHeaderComponent={
           <View style={styles.content}>
@@ -95,10 +99,14 @@ export default function LogsScreen() {
             <View style={styles.titleSection}>
               <Text style={styles.titleText}>Agent Reasoning Logs</Text>
               <View style={styles.subtitleRow}>
-                <Text style={styles.subtitleText}>Live telemetry from operational neural agents</Text>
+                <Text style={[styles.subtitleText, textShrink]}>
+                  Live telemetry from operational neural agents
+                </Text>
                 <View style={styles.statusTag}>
                   <View style={[styles.statusDot, { backgroundColor: colors.tint }]} />
-                  <Text style={styles.statusText}>SYSTEM ACTIVE</Text>
+                  <Text style={styles.statusText} numberOfLines={1}>
+                    SYSTEM ACTIVE
+                  </Text>
                 </View>
               </View>
             </View>
@@ -158,17 +166,23 @@ export default function LogsScreen() {
                 <View style={styles.logHeader}>
                   <View style={styles.logAgentInfo}>
                     <View style={[styles.agentTag, { backgroundColor: actColor + '15' }]}>
-                      <Text style={[styles.agentTagText, { color: actColor }]}>{getAgentLabel(item.agent_number)}</Text>
+                      <Text style={[styles.agentTagText, { color: actColor }]} numberOfLines={1}>
+                        {getAgentLabel(item.agent_number)}
+                      </Text>
                     </View>
-                    <Text style={styles.logRole}>/ {item.agent_name} /</Text>
+                    <Text style={[styles.logRole, textShrink]} numberOfLines={1}>
+                      / {item.agent_name} /
+                    </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#484E5D' }}>{item.duration_ms}ms</Text>
-                    <Text style={styles.logTime}>{formatTime(item.created_at)}</Text>
+                  <View style={styles.logMeta}>
+                    <Text style={styles.logDuration}>{item.duration_ms}ms</Text>
+                    <Text style={[styles.logTime, textShrink]} numberOfLines={1}>
+                      {formatTime(item.created_at)}
+                    </Text>
                   </View>
                 </View>
 
-                <Text style={styles.logText}>{item.reasoning}</Text>
+                <Text style={[styles.logText, textShrink]}>{item.reasoning}</Text>
 
                 <View style={styles.dataSection}>
                   <View style={styles.dataHeader}>
@@ -185,7 +199,7 @@ export default function LogsScreen() {
                       {item.input_data ? (
                         <>
                           <Text style={styles.codeMetaTitle}>[INPUT DATA]</Text>
-                          <Text style={styles.codeText}>
+                          <Text style={styles.codeText} selectable>
                             {JSON.stringify(item.input_data, null, 2)}
                           </Text>
                         </>
@@ -212,7 +226,7 @@ export default function LogsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 16 },
+  content: { paddingHorizontal: screenPadding },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -226,19 +240,47 @@ const styles = StyleSheet.create({
   headerLoc: { color: "#E6EDF3", fontSize: 14, fontFamily: "Inter_700Bold" },
   titleSection: { marginBottom: 20 },
   titleText: { fontSize: 24, fontFamily: "Inter_700Bold", color: "#E6EDF3", marginBottom: 6 },
-  subtitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  subtitleText: { fontSize: 12, color: "#8B949E", fontFamily: "Inter_400Regular", flex: 1 },
-  statusTag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#111418', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 1, borderColor: '#1C2128' },
+  subtitleRow: { flexDirection: 'column', gap: 10, alignItems: 'flex-start' },
+  subtitleText: { fontSize: 12, color: "#8B949E", fontFamily: "Inter_400Regular", width: '100%' },
+  statusTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#111418',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#1C2128',
+    flexShrink: 0,
+  },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 10, fontFamily: 'Inter_700Bold', color: '#8B949E', letterSpacing: 0.5 },
   filterRow: { flexDirection: "row", marginBottom: 24 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
   filterText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  logWrapper: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, backgroundColor: '#111418', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#1C2128' },
-  indicator: { width: 3, height: '100%' },
-  logCard: { flex: 1, padding: 12 },
-  logHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  logAgentInfo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  logWrapper: {
+    flexDirection: 'row',
+    marginHorizontal: screenPadding,
+    marginBottom: 12,
+    backgroundColor: '#111418',
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#1C2128',
+  },
+  indicator: { width: 3, alignSelf: 'stretch' },
+  logCard: { flex: 1, minWidth: 0, padding: 12 },
+  logHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 10,
+  },
+  logAgentInfo: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  logMeta: { flexShrink: 0, alignItems: 'flex-end', gap: 2, maxWidth: '38%' },
+  logDuration: { fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#484E5D' },
   agentTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   agentTagText: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
   logRole: { fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8B949E' },
@@ -249,5 +291,12 @@ const styles = StyleSheet.create({
   dataHeaderText: { fontSize: 10, fontFamily: 'Inter_700Bold', color: '#8B949E', letterSpacing: 0.5 },
   codeBlock: { padding: 12, borderTopWidth: 1, borderTopColor: '#1C2128' },
   codeMetaTitle: { fontSize: 9, fontFamily: 'Inter_700Bold', color: '#8B949E', marginBottom: 4, letterSpacing: 0.5 },
-  codeText: { fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', fontSize: 11, color: '#F0883E', lineHeight: 16, marginBottom: 8 },
+  codeText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 10,
+    color: '#F0883E',
+    lineHeight: 15,
+    marginBottom: 8,
+    flexWrap: 'wrap',
+  },
 });

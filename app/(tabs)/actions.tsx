@@ -4,6 +4,7 @@ import {
   FlatList,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -12,9 +13,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 
+import MetricsBlock from "@/components/MetricsBlock";
+import { API_ENDPOINTS } from "@/constants/API";
 import { useColors } from "@/hooks/useColors";
 import { useActions } from "@/hooks/useCrises";
-import { API_ENDPOINTS } from "@/constants/API";
+import { invalidateCrisisQueries } from "@/lib/queryKeys";
+import { screenPadding, tabBarClearance, textShrink } from "@/constants/layout";
 
 const FILTERS = ["All", "Routing", "Dispatch", "Alerts"];
 
@@ -54,10 +58,7 @@ export default function ActionsScreen() {
       });
       if (!res.ok) throw new Error("Failed to execute action");
       
-      // Invalidate queries so that action page, detail page, and stats page refresh
-      queryClient.invalidateQueries({ queryKey: ["actions"] });
-      queryClient.invalidateQueries({ queryKey: ["crises"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_stats"] });
+      await invalidateCrisisQueries(queryClient);
     } catch (err) {
       console.error("Execution error:", err);
     } finally {
@@ -106,7 +107,7 @@ export default function ActionsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingTop: topPad,
-          paddingBottom: 100,
+          paddingBottom: tabBarClearance,
         }}
         ListHeaderComponent={
           <View style={styles.content}>
@@ -128,18 +129,22 @@ export default function ActionsScreen() {
               </View>
             </View>
 
-            {/* Filters */}
-            <View style={styles.filterRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterScroll}
+              contentContainerStyle={styles.filterRow}
+            >
               {FILTERS.map((f) => (
                 <Pressable
                   key={f}
                   onPress={() => setActiveFilter(f)}
                   style={[
                     styles.filterChip,
-                    { 
+                    {
                       backgroundColor: activeFilter === f ? colors.tint : "#161B22",
-                      borderColor: activeFilter === f ? colors.tint : "#30363D" 
-                    }
+                      borderColor: activeFilter === f ? colors.tint : "#30363D",
+                    },
                   ]}
                 >
                   <Text style={[styles.filterText, { color: activeFilter === f ? "#fff" : "#8B949E" }]}>
@@ -147,7 +152,7 @@ export default function ActionsScreen() {
                   </Text>
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
 
 
 
@@ -175,30 +180,34 @@ export default function ActionsScreen() {
             <View style={[styles.card, { borderColor: actColor + '30' }]}>
               <View style={[styles.cardHeader, { borderBottomColor: '#1C2128' }]}>
                 <View style={styles.cardHeaderLeft}>
-                  <MaterialCommunityIcons name={actIcon as any} size={16} color={actColor} />
-                  <Text style={[styles.cardTypeText, { color: actColor }]}>
+                  <MaterialCommunityIcons name={actIcon as any} size={16} color={actColor} style={{ flexShrink: 0 }} />
+                  <Text style={[styles.cardTypeText, textShrink, { color: actColor }]} numberOfLines={2}>
                     {getActionTypeLabel(item.action_type)}
                   </Text>
                 </View>
-                <Text style={styles.cardTime}>{formatTime(item.created_at)}</Text>
+                <Text style={[styles.cardTime, textShrink]} numberOfLines={1}>
+                  {formatTime(item.created_at)}
+                </Text>
               </View>
               
               <View style={styles.cardBody}>
                 <View style={styles.cardTitleRow}>
-                  <Text style={styles.cardTitle}>{item.description.split(" in ")[0].split(" to ")[0]}</Text>
+                  <Text style={[styles.cardTitle, textShrink]} numberOfLines={2}>
+                    {item.description.split(" in ")[0].split(" to ")[0]}
+                  </Text>
                   <View style={[styles.statusTag, { 
                     backgroundColor: isSimulated ? "rgba(240,136,62,0.08)" : "rgba(63,185,80,0.08)",
                     borderColor: isSimulated ? "rgba(240,136,62,0.2)" : "rgba(63,185,80,0.2)",
                     borderWidth: 1
                   }]}>
                     <View style={[styles.statusDot, { backgroundColor: isSimulated ? colors.warning : "#3FB950" }]} />
-                    <Text style={[styles.statusTagText, { color: isSimulated ? colors.warning : "#3FB950" }]}>
+                    <Text style={[styles.statusTagText, { color: isSimulated ? colors.warning : "#3FB950" }]} numberOfLines={1}>
                       {item.status.toUpperCase()}
                     </Text>
                   </View>
                 </View>
                 
-                <Text style={styles.cardDesc}>{item.description}</Text>
+                <Text style={[styles.cardDesc, textShrink]}>{item.description}</Text>
 
                 {item.simulation_result?.message && (
                   <View style={{ 
@@ -208,13 +217,15 @@ export default function ActionsScreen() {
                     backgroundColor: 'rgba(13,17,23,0.4)',
                     paddingVertical: 8,
                     borderRadius: 4,
-                    marginBottom: 16
+                    marginBottom: 8
                   }}>
                     <Text style={{ fontSize: 12, fontStyle: 'italic', color: '#8B949E', fontFamily: 'Inter_400Regular' }}>
                       "Simulation: {item.simulation_result.message}"
                     </Text>
                   </View>
                 )}
+
+                <MetricsBlock before={item.before_metrics} after={item.after_metrics} />
 
                 {isSimulated && (
                   <Pressable 
@@ -243,7 +254,7 @@ export default function ActionsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 16 },
+  content: { paddingHorizontal: screenPadding },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -259,8 +270,9 @@ const styles = StyleSheet.create({
   opsRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   opsDot: { width: 6, height: 6, borderRadius: 3 },
   opsText: { fontSize: 12, fontFamily: "Inter_700Bold", color: "#8B949E", letterSpacing: 0.5 },
-  filterRow: { flexDirection: "row", gap: 10, marginBottom: 24 },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
+  filterScroll: { marginBottom: 20, flexGrow: 0 },
+  filterRow: { flexDirection: "row", gap: 10, paddingRight: 8 },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, flexShrink: 0 },
   filterText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   perfCard: { backgroundColor: "#111418", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#1C2128", marginBottom: 24 },
   perfHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
@@ -275,15 +287,39 @@ const styles = StyleSheet.create({
   perfSub: { fontSize: 10, fontFamily: "Inter_400Regular", color: "#484E5D" },
   perfBar: { height: 2, borderRadius: 1, overflow: "hidden" },
   perfBarFill: { height: "100%" },
-  card: { backgroundColor: "#111418", borderRadius: 12, borderWidth: 1, marginHorizontal: 16, marginBottom: 12, overflow: "hidden" },
-  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1 },
-  cardHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 6 },
-  cardTypeText: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
-  cardTime: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "#484E5D" },
+  card: {
+    backgroundColor: "#111418",
+    borderRadius: 12,
+    borderWidth: 1,
+    marginHorizontal: screenPadding,
+    marginBottom: 12,
+    overflow: "hidden",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  cardHeaderLeft: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "flex-start", gap: 6 },
+  cardTypeText: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.5, flex: 1 },
+  cardTime: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "#484E5D", flexShrink: 0, maxWidth: 72 },
   cardBody: { padding: 12 },
-  cardTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
-  cardTitle: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#E6EDF3", flex: 1 },
-  statusTag: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+  cardTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8 },
+  cardTitle: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#E6EDF3", flex: 1, minWidth: 0 },
+  statusTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    flexShrink: 0,
+    maxWidth: "42%",
+  },
   statusDot: { width: 4, height: 4, borderRadius: 2 },
   statusTagText: { fontSize: 10, fontFamily: "Inter_700Bold" },
   cardDesc: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#8B949E", lineHeight: 18, marginBottom: 16 },

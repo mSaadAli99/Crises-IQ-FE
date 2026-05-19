@@ -1,5 +1,4 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, router } from "expo-router";
 import React from "react";
 import {
@@ -12,8 +11,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CrisisMap from "@/components/CrisisMap";
+import MetricsBlock from "@/components/MetricsBlock";
+import SocialFeed from "@/components/SocialFeed";
 import { useColors } from "@/hooks/useColors";
 import { useCrisis } from "@/hooks/useCrises";
+import { screenPadding, textShrink } from "@/constants/layout";
 
 function ConfidenceCircle({ value }: { value: number }) {
   return (
@@ -109,13 +111,15 @@ export default function CrisisDetailScreen() {
         >
           <Ionicons name="chevron-back" size={24} color="#E6EDF3" />
         </Pressable>
-        <View style={styles.logoRow}>
-          <MaterialCommunityIcons name="asterisk" size={24} color={colors.tint} />
-          <Text style={styles.headerTitle}>CrisisIQ</Text>
+        <View style={[styles.logoRow, { flex: 1, minWidth: 0, justifyContent: 'center' }]}>
+          <MaterialCommunityIcons name="asterisk" size={22} color={colors.tint} />
+          <Text style={styles.headerTitle} numberOfLines={1}>CrisisIQ</Text>
         </View>
         <View style={styles.headerRight}>
-          <Text style={styles.headerLoc}>{crisis.location.split(',')[0]}</Text>
-          <Ionicons name="location-outline" size={14} color="#8B949E" />
+          <Text style={[styles.headerLoc, textShrink]} numberOfLines={1}>
+            {crisis.location.split(',')[0]}
+          </Text>
+          <Ionicons name="location-outline" size={14} color="#8B949E" style={{ flexShrink: 0 }} />
         </View>
       </View>
 
@@ -131,10 +135,14 @@ export default function CrisisDetailScreen() {
           {/* Main Detection Card */}
           <View style={[styles.mainCard, { backgroundColor: "#161B22", borderColor: "#30363D" }]}>
             <View style={styles.mainCardRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.mainCardTitle}>{(crisis.crisis_type || "").toUpperCase()} Detection</Text>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+                <Text style={[styles.mainCardTitle, textShrink]} numberOfLines={2}>
+                  {(crisis.crisis_type || "").toUpperCase()} Detection
+                </Text>
                 <Text style={styles.mainCardSubtitle}>
-                  <Text style={{ color: crisis.status === 'resolved' ? '#3FB950' : colors.warning }}>{(crisis.status || 'Active').toUpperCase()}</Text>
+                  <Text style={{ color: crisis.status === 'resolved' ? '#3FB950' : colors.warning }}>
+                    {(crisis.status || 'Active').toUpperCase()}
+                  </Text>
                 </Text>
               </View>
               <ConfidenceCircle value={crisis.confidence_score || 0} />
@@ -145,22 +153,38 @@ export default function CrisisDetailScreen() {
           {/* Situation Analysis */}
           <View style={[styles.analysisCard, { backgroundColor: "#161B22", borderColor: "#30363D" }]}>
             <View style={styles.analysisHeader}>
-              <Text style={styles.analysisTitle}>SITUATION ANALYSIS</Text>
+              <Text style={[styles.analysisTitle, textShrink]}>SITUATION ANALYSIS</Text>
               <View style={[styles.severityTag, { backgroundColor: crisis.severity === 'critical' ? colors.critical + '20' : colors.warning + '20' }]}>
-                <Text style={[styles.severityTagText, { color: crisis.severity === 'critical' ? colors.critical : colors.warning }]}>{(crisis.severity || 'Unknown').toUpperCase()}</Text>
+                <Text
+                  style={[styles.severityTagText, { color: crisis.severity === 'critical' ? colors.critical : colors.warning }]}
+                  numberOfLines={1}
+                >
+                  {(crisis.severity || 'Unknown').toUpperCase()}
+                </Text>
               </View>
             </View>
 
             <View style={styles.analysisGrid}>
-              <View style={styles.analysisItem}>
+              <View style={[styles.analysisItem, styles.analysisItemHalf]}>
                 <Text style={styles.analysisKey}>SEVERITY</Text>
-                <Text style={styles.analysisVal}>{(crisis.severity || '--').toUpperCase()}</Text>
+                <Text style={[styles.analysisVal, textShrink]} numberOfLines={2}>
+                  {(crisis.situation_report?.severity_level || crisis.severity || '--').toUpperCase()}
+                </Text>
               </View>
-              <View style={styles.analysisItem}>
+              <View style={[styles.analysisItem, styles.analysisItemHalf]}>
                 <Text style={styles.analysisKey}>LOCATION</Text>
-                <Text style={styles.analysisVal}>{crisis.location}</Text>
+                <Text style={[styles.analysisVal, textShrink]} numberOfLines={3}>
+                  {crisis.location}
+                </Text>
               </View>
             </View>
+
+            {crisis.situation_report?.affected_area ? (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[styles.analysisKey, { marginBottom: 4 }]}>AFFECTED AREA</Text>
+                <Text style={styles.analysisText}>{crisis.situation_report.affected_area}</Text>
+              </View>
+            ) : null}
 
             <Text style={styles.analysisText}>
               {crisis.situation_report?.reasoning || `Crisis reported at ${crisis.location}. Status: ${crisis.status || 'Active'}.`}
@@ -173,7 +197,14 @@ export default function CrisisDetailScreen() {
             )}
           </View>
 
-          {/* Input Signals */}
+          <Text style={styles.sectionTitle}>SOCIAL VERIFICATION</Text>
+          <View style={{ marginBottom: 24 }}>
+            <SocialFeed
+              posts={crisis.social_verification_sources || []}
+              count={crisis.social_sources_count}
+            />
+          </View>
+
           <Text style={styles.sectionTitle}>INPUT SIGNALS ({signals.length})</Text>
           {signals.length > 0 ? (
             <View style={{ gap: 12, marginBottom: 24 }}>
@@ -197,10 +228,12 @@ export default function CrisisDetailScreen() {
                 return (
                   <View key={index} style={[styles.socialCard, { marginBottom: 0 }]}>
                     <View style={styles.signalHeader}>
-                      <Ionicons name={getSourceIcon(sig.source_type) as any} size={16} color={getSourceColor(sig.source_type)} />
-                      <Text style={styles.signalLabel}>{(sig.source_type || "intelligence").toUpperCase()} FEED ({sig.location || crisis.location})</Text>
+                      <Ionicons name={getSourceIcon(sig.source_type) as any} size={16} color={getSourceColor(sig.source_type)} style={{ flexShrink: 0 }} />
+                      <Text style={[styles.signalLabel, textShrink]} numberOfLines={2}>
+                        {(sig.source_type || "intelligence").toUpperCase()} · {sig.location || crisis.location}
+                      </Text>
                     </View>
-                    <Text style={styles.socialText}>
+                    <Text style={[styles.socialText, textShrink]}>
                       "{sig.normalized_text || sig.text || "No signal details available."}"
                     </Text>
                   </View>
@@ -251,28 +284,37 @@ export default function CrisisDetailScreen() {
                       }
                     ]}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <MaterialCommunityIcons name={getActionIcon(act.action_type) as any} size={20} color={getActionColor(act.action_type)} />
-                      <Text style={[styles.actionBtnText, { color: getActionColor(act.action_type) }]}>
+                    <View style={styles.actionCardHeader}>
+                      <MaterialCommunityIcons
+                        name={getActionIcon(act.action_type) as any}
+                        size={20}
+                        color={getActionColor(act.action_type)}
+                        style={{ flexShrink: 0 }}
+                      />
+                      <Text
+                        style={[styles.actionBtnText, textShrink, { color: getActionColor(act.action_type) }]}
+                        numberOfLines={1}
+                      >
                         {(act.action_type || "action").toUpperCase()}
                       </Text>
-                      <View style={{ 
+                      <View style={{
                         backgroundColor: act.status === 'simulated' ? 'rgba(59,141,212,0.15)' : 'rgba(63,185,80,0.15)',
                         paddingHorizontal: 8,
                         paddingVertical: 2,
-                        borderRadius: 4
+                        borderRadius: 4,
+                        flexShrink: 0,
                       }}>
-                        <Text style={{ 
-                          fontSize: 10, 
-                          fontFamily: 'Inter_700Bold', 
-                          color: act.status === 'simulated' ? colors.tint : '#3FB950' 
+                        <Text style={{
+                          fontSize: 10,
+                          fontFamily: 'Inter_700Bold',
+                          color: act.status === 'simulated' ? colors.tint : '#3FB950',
                         }}>
                           {(act.status || "pending").toUpperCase()}
                         </Text>
                       </View>
                     </View>
-                    
-                    <Text style={{ fontSize: 13, color: '#E6EDF3', lineHeight: 18, fontFamily: 'Inter_400Regular' }}>
+
+                    <Text style={[styles.actionDesc, textShrink]}>
                       {act.description}
                     </Text>
 
@@ -291,6 +333,8 @@ export default function CrisisDetailScreen() {
                         </Text>
                       </View>
                     )}
+
+                    <MetricsBlock before={act.before_metrics} after={act.after_metrics} />
                   </View>
                 );
               })
@@ -314,16 +358,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: screenPadding,
     paddingBottom: 12,
+    gap: 8,
     zIndex: 10,
     backgroundColor: "#0A0C10",
   },
-  backBtn: { width: 40 },
-  logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#E6EDF3", letterSpacing: -0.5 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 6, width: 100, justifyContent: 'flex-end' },
-  headerLoc: { color: "#8B949E", fontSize: 12, fontFamily: "Inter_700Bold" },
+  backBtn: { width: 36, flexShrink: 0 },
+  logoRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#E6EDF3", letterSpacing: -0.5 },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flex: 1,
+    minWidth: 0,
+    maxWidth: "42%",
+    justifyContent: 'flex-end',
+  },
+  headerLoc: { color: "#8B949E", fontSize: 11, fontFamily: "Inter_700Bold", textAlign: 'right' },
   notFound: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   notFoundText: { fontSize: 16, fontFamily: "Inter_400Regular" },
   mapContainer: { height: 240, overflow: 'hidden' },
@@ -332,21 +385,35 @@ const styles = StyleSheet.create({
   alertBadgeText: { color: '#fff', fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
   zoneBadge: { backgroundColor: 'rgba(13,17,23,0.8)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 4 },
   zoneBadgeText: { color: '#8B949E', fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
-  content: { padding: 16 },
-  mainCard: { borderRadius: 12, borderWidth: 1, padding: 16, marginBottom: 16 },
+  content: { padding: screenPadding },
+  mainCard: { borderRadius: 12, borderWidth: 1, padding: 16, marginBottom: 16, overflow: 'hidden' },
   mainCardRow: { flexDirection: 'row', alignItems: 'center' },
   mainCardTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#E6EDF3', marginBottom: 4 },
   mainCardSubtitle: { fontSize: 13, fontFamily: 'Inter_400Regular', color: '#8B949E' },
   confidenceContainer: { width: 60, height: 60 },
   confidenceText: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#E6EDF3' },
   confidenceLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', color: '#484E5D', marginTop: 12, letterSpacing: 0.5 },
-  analysisCard: { borderRadius: 12, borderWidth: 1, padding: 16, marginBottom: 24 },
-  analysisHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  analysisTitle: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#8B949E', letterSpacing: 0.5 },
-  severityTag: { backgroundColor: 'rgba(255,138,107,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4 },
+  analysisCard: { borderRadius: 12, borderWidth: 1, padding: 16, marginBottom: 16, overflow: 'hidden' },
+  analysisHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 16,
+  },
+  analysisTitle: { flex: 1, fontSize: 11, fontFamily: 'Inter_700Bold', color: '#8B949E', letterSpacing: 0.5 },
+  severityTag: {
+    backgroundColor: 'rgba(255,138,107,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+    flexShrink: 0,
+    maxWidth: '45%',
+  },
   severityTagText: { color: '#FF8A6B', fontSize: 10, fontFamily: 'Inter_700Bold' },
-  analysisGrid: { flexDirection: 'row', gap: 32, marginBottom: 16 },
+  analysisGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 16 },
   analysisItem: { gap: 4 },
+  analysisItemHalf: { width: '47%', minWidth: 120 },
   analysisKey: { fontSize: 10, fontFamily: 'Inter_700Bold', color: '#484E5D', letterSpacing: 0.5 },
   analysisVal: { fontSize: 16, fontFamily: 'Inter_700Bold', color: '#E6EDF3' },
   analysisText: { fontSize: 14, fontFamily: 'Inter_400Regular', color: '#E6EDF3', lineHeight: 20 },
@@ -356,11 +423,36 @@ const styles = StyleSheet.create({
   signalHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   signalLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', color: '#8B949E' },
   signalVal: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#E6EDF3' },
-  socialCard: { backgroundColor: '#161B22', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#30363D', marginBottom: 24 },
+  socialCard: {
+    backgroundColor: '#161B22',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#30363D',
+    overflow: 'hidden',
+  },
+  actionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  actionDesc: {
+    fontSize: 13,
+    color: '#E6EDF3',
+    lineHeight: 18,
+    fontFamily: 'Inter_400Regular',
+  },
   socialText: { fontSize: 13, fontFamily: 'Inter_400Regular', color: '#E6EDF3', fontStyle: 'italic', lineHeight: 18 },
   actionsList: { gap: 10, marginBottom: 32 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 8, gap: 12 },
-  actionBtnSecondary: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 8, gap: 12, backgroundColor: '#161B22', borderWidth: 1, borderColor: '#30363D' },
+  actionBtnSecondary: {
+    borderRadius: 8,
+    backgroundColor: '#161B22',
+    borderWidth: 1,
+    borderColor: '#30363D',
+    overflow: 'hidden',
+  },
   actionBtnText: { flex: 1, fontSize: 14, fontFamily: 'Inter_700Bold', color: '#E6EDF3' },
   simulationBtn: { backgroundColor: '#E6EDF3', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 12, gap: 10 },
   simulationBtnText: { fontSize: 16, fontFamily: 'Inter_700Bold', color: '#0A0C10' },

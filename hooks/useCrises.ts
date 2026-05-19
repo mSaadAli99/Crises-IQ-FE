@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_ENDPOINTS } from '@/constants/API';
+import { invalidateCrisisQueries } from '@/lib/queryKeys';
 
 export interface Crisis {
   id: number;
@@ -11,6 +12,31 @@ export interface Crisis {
   severity: string;
   status: string;
   created_at: string;
+  social_verification_sources?: SocialVerificationPost[];
+  social_sources_count?: number;
+}
+
+export interface SocialVerificationPost {
+  username?: string;
+  text?: string;
+  timestamp?: string;
+  platform?: string;
+}
+
+export interface SituationReport {
+  id: number;
+  crisis_id: number;
+  severity_level: string;
+  affected_area: string;
+  impact_estimate: string;
+  reasoning: string;
+  created_at: string;
+}
+
+export interface CrisisDetail extends Crisis {
+  situation_report?: SituationReport | null;
+  actions?: ActionData[];
+  agent_logs?: AgentLogData[];
 }
 
 export function useCrises(limit?: number, offset?: number) {
@@ -36,6 +62,13 @@ export interface DashboardStats {
   system_status: string;
 }
 
+export interface DetailedStats {
+  active_crises: number;
+  total_signals: number;
+  alerts_sent: number;
+  resolved_today: number;
+}
+
 export function useStats() {
   return useQuery<DashboardStats>({
     queryKey: ['dashboard_stats'],
@@ -49,8 +82,21 @@ export function useStats() {
   });
 }
 
+export function useDetailedStats() {
+  return useQuery<DetailedStats>({
+    queryKey: ['stats_detailed'],
+    queryFn: async () => {
+      const response = await fetch(API_ENDPOINTS.STATS_DETAILED);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    },
+  });
+}
+
 export function useCrisis(id: string | number) {
-  return useQuery({
+  return useQuery<CrisisDetail>({
     queryKey: ['crisis', id],
     queryFn: async () => {
       const response = await fetch(`${API_ENDPOINTS.CRISES}/${id}`);
@@ -72,6 +118,9 @@ export interface SignalData {
   location: string;
   latitude?: number;
   longitude?: number;
+  image_url?: string | null;
+  verification_score?: number | null;
+  is_ai_generated?: boolean;
   created_at: string;
 }
 
@@ -97,10 +146,10 @@ export interface ActionData {
   simulation_result?: {
     success?: boolean;
     message?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
-  before_metrics?: Record<string, any>;
-  after_metrics?: Record<string, any>;
+  before_metrics?: Record<string, unknown>;
+  after_metrics?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -119,11 +168,11 @@ export function useActions() {
 
 export interface AgentLogData {
   id: number;
-  crisis_id: number;
+  crisis_id: number | null;
   agent_number: number;
   agent_name: string;
-  input_data?: any;
-  output_data?: any;
+  input_data?: unknown;
+  output_data?: unknown;
   reasoning: string;
   duration_ms: number;
   created_at: string;
@@ -139,5 +188,20 @@ export function useAgentLogs() {
       }
       return response.json();
     },
+  });
+}
+
+export function useSeedDemo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const response = await fetch(API_ENDPOINTS.SEED, { method: 'POST' });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as { detail?: string }).detail || 'Seed failed');
+      }
+      return response.json();
+    },
+    onSuccess: () => invalidateCrisisQueries(queryClient),
   });
 }

@@ -53,9 +53,15 @@ function ClassicTabLayout() {
           borderTopWidth: 1,
           borderTopColor: "#30363D",
           elevation: 0,
-          paddingBottom: insets.bottom + 10,
-          height: 70 + insets.bottom,
-          ...(isWeb ? { height: 84 } : {}),
+          paddingBottom: insets.bottom + 8,
+          paddingTop: 6,
+          height: 64 + insets.bottom,
+          ...(isWeb ? { height: 76 } : {}),
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontFamily: "Inter_600SemiBold",
+          marginTop: 2,
         },
       }}
     >
