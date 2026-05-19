@@ -16,7 +16,7 @@ function findWorkspaceRoot(startDir) {
     }
     dir = path.dirname(dir);
   }
-  throw new Error("Could not find workspace root (no pnpm-workspace.yaml found)");
+  return startDir;
 }
 
 const workspaceRoot = findWorkspaceRoot(projectRoot);
@@ -55,6 +55,14 @@ function stripProtocol(domain) {
 }
 
 function getDeploymentDomain() {
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return stripProtocol(process.env.VERCEL_PROJECT_PRODUCTION_URL);
+  }
+
+  if (process.env.VERCEL_URL) {
+    return stripProtocol(process.env.VERCEL_URL);
+  }
+
   if (process.env.REPLIT_INTERNAL_APP_DOMAIN) {
     return stripProtocol(process.env.REPLIT_INTERNAL_APP_DOMAIN);
   }
@@ -68,7 +76,7 @@ function getDeploymentDomain() {
   }
 
   console.error(
-    "ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN",
+    "ERROR: No deployment domain found. Set VERCEL_URL, EXPO_PUBLIC_DOMAIN, or a Replit domain env var",
   );
   process.exit(1);
 }
@@ -146,16 +154,10 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
     console.log(`Setting EXPO_PUBLIC_REPL_ID=${expoPublicReplId}`);
   }
 
+  const npx = process.platform === "win32" ? "npx.cmd" : "npx";
   metroProcess = spawn(
-    "pnpm",
-    [
-      "exec",
-      "expo",
-      "start",
-      "--no-dev",
-      "--minify",
-      "--localhost",
-    ],
+    npx,
+    ["expo", "start", "--no-dev", "--minify", "--localhost"],
     {
       stdio: ["ignore", "pipe", "pipe"],
       detached: false,
