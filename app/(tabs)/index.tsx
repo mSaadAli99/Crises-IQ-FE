@@ -155,7 +155,8 @@ export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { data: backendCrises, isLoading, isError, refetch } = useCrises(5);
+  const [limit, setLimit] = React.useState(5);
+  const { data: backendCrises, isLoading, isError, refetch } = useCrises(limit);
   const { data: stats, isLoading: statsLoading } = useStats();
   const { data: detailedStats } = useDetailedStats();
   const seedDemo = useSeedDemo();
@@ -299,6 +300,13 @@ export default function DashboardScreen() {
                   </Text>
                 ) : null}
               </View>
+              {!isError && displayCrises.length > 0 && (
+                <Pressable onPress={() => setLimit(prev => prev === 5 ? 20 : 5)}>
+                  <Text style={styles.viewAllText}>
+                    {limit === 5 ? "VIEW MORE" : "VIEW LESS"}
+                  </Text>
+                </Pressable>
+              )}
             </View>
           </>
         }
